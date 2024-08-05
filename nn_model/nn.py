@@ -160,7 +160,7 @@ def k_fold_cross_validation(data, labels, k=5):
 
 
 
-file_path = '/usr/src/app/cdf_files/RCTLS_01JUL2024_000543_L2C_STD.nc'
+file_path = '/usr/src/app/RCTLS_01JUL2024_000543_L2C_STD.nc'
 ds = xr.open_dataset(file_path)
 
 # Specify the variable name

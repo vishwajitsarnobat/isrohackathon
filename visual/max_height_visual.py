@@ -5,7 +5,7 @@ import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
 # Load the dataset
-dwr = xr.open_dataset('/usr/src/app/cdf_files/RCTLS_01JUL2024_000543_L2C_STD.nc')
+dwr = xr.open_dataset('/usr/src/app/RCTLS_01JUL2024_000543_L2C_STD.nc')
 print(f"DWR: {list(dwr.keys())}")
 
 # Extract the DBZ variable
