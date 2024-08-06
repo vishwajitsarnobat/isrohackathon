@@ -2,9 +2,9 @@ import xarray as xr
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Conv3D, Flatten, Dense, Bidirectional, LSTM, Concatenate
+from tensorflow.keras.layers import Input, Conv3D, Conv1D, Bidirectional, LSTM, Dense, Flatten, Concatenate
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-from skimage.measure import label, regionprops
+from sklearn.preprocessing import StandardScaler
 
 # Preprocessing
 def extract_variables(file_path, variable):
@@ -13,48 +13,30 @@ def extract_variables(file_path, variable):
     ds.close()
     return var
 
-def normalize(data):
-    return (data - data.min()) / (data.max() - data.min())
-
-def identify_precipitating_systems(reflectivity, threshold=20, min_area=50):
-    precipitating_systems = []
-    for t in range(reflectivity.shape[0]):
-        mask = reflectivity[t] > threshold
-        if np.sum(mask) > min_area:
-            precipitating_systems.append(mask)
-    return precipitating_systems
-
-def track_precipitation_systems(reflectivity, threshold=20):
-    tracks = []
-    for t in range(reflectivity.shape[0]):
-        labeled_array, _ = label(reflectivity[t] > threshold, return_num=True)
-        regions = regionprops(labeled_array)
-        system_tracks = [{'centroid': region.centroid, 'area': region.area} for region in regions]
-        tracks.append(system_tracks)
-    return tracks
+def standardize(data):
+    # Flatten the data for fitting the scaler
+    n_samples = data.size
+    reshaped_data = data.reshape(n_samples, 1)
+    scaler = StandardScaler()
+    standardized_data = scaler.fit_transform(reshaped_data).reshape(data.shape)
+    return standardized_data
 
 file_path = '/usr/src/app/RCTLS_01JUL2024_000543_L2C_STD.nc'
 file_path = '/home/vishwajitsarnobat/workspace/isrohackathon/RCTLS_01JUL2024_000543_L2C_STD.nc' # for my local
+
+# Extract and standardize data
 radial_velocity = extract_variables(file_path, 'VEL')
 reflectivity = extract_variables(file_path, 'DBZ')
 
-normalized_velocity = normalize(radial_velocity)
-normalized_reflectivity = normalize(reflectivity)
+standardized_velocity = standardize(radial_velocity)  # Standardizing
+standardized_reflectivity = standardize(reflectivity)
 
-# Identify and track precipitation systems
-precipitating_systems = identify_precipitating_systems(normalized_reflectivity)
-tracks = track_precipitation_systems(normalized_reflectivity)
+# Use the entire snapshot for training and evaluation
+train_velocity = standardized_velocity
+train_reflectivity = standardized_reflectivity
 
-# Prepare data for prediction
-def prepare_data_for_prediction(reflectivity, sequence_length=10):
-    X, y = [], []
-    for t in range(sequence_length, reflectivity.shape[0]):
-        X.append(reflectivity[t-sequence_length:t])
-        y.append(reflectivity[t])
-    return np.array(X), np.array(y)
-
-sequence_length = 10
-X, y = prepare_data_for_prediction(normalized_reflectivity, sequence_length)
+# Dummy labels for the example (replace with actual labels if available)
+train_labels = np.random.rand(train_velocity.shape[0], 1)
 
 # Building the Model
 def create_spatial_model(input_shape):
@@ -84,37 +66,41 @@ def create_radarcast_net(spatial_input_shape, temporal_input_shape):
     model = Model(inputs=[spatial_model.input, temporal_model.input], outputs=output)
     return model
 
-spatial_input_shape = (sequence_length, 81, 481, 481, 1)  # Adjust according to data
-temporal_input_shape = (sequence_length, 1)  # Adjust according to data
+# Adjust the input shapes according to your data
+spatial_input_shape = train_velocity.shape[1:] + (1,)  # Adding channel dimension
+temporal_input_shape = (train_velocity.shape[1], 1)  # Assuming time dimension
 
 model = create_radarcast_net(spatial_input_shape, temporal_input_shape)
 
 model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mae'])
 
 # Training the Model
-early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+early_stopping = EarlyStopping(monitor='loss', patience=10, restore_best_weights=True)
 model_checkpoint = ModelCheckpoint('radarcast_net_best_model.h5', save_best_only=True)
 
 history = model.fit(
-    [X[..., np.newaxis], y[..., np.newaxis]],  # Adding a new axis for channel dimension
-    y,
-    validation_split=0.2,
+    [train_velocity[..., np.newaxis], train_reflectivity[..., np.newaxis]],  # Adding a new axis for channel dimension
+    train_labels,
     epochs=100,
     batch_size=32,
     callbacks=[early_stopping, model_checkpoint]
 )
 
 # Evaluating the Model
-test_loss, test_mae = model.evaluate([X[..., np.newaxis], y[..., np.newaxis]], y)
+test_loss, test_mae = model.evaluate([train_velocity[..., np.newaxis], train_reflectivity[..., np.newaxis]], train_labels)
 
-# Predict Future Path
-def predict_future_path(model, recent_data):
-    return model.predict(recent_data)
+# Predicting and Correcting
+def predict_and_correct(model, initial_data):
+    predictions = model.predict(initial_data)
+    # Logic for correcting predictions every 30 minutes
+    return predictions
 
-recent_data = X[-sequence_length:]  # Example data with the last sequence length
-predicted_path = predict_future_path(model, np.expand_dims(recent_data, axis=0))
+initial_velocity_data = train_velocity[:100, ..., np.newaxis]  # Example initial data with added channel dimension
+initial_reflectivity_data = train_reflectivity[:100, ..., np.newaxis]  # Example initial data with added channel dimension
+initial_data = [initial_velocity_data, initial_reflectivity_data]
+predictions = predict_and_correct(model, initial_data)
 
-print(predicted_path)
+print(predictions)
 
 
 

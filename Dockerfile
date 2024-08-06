@@ -20,6 +20,7 @@ RUN apt-get update && \
 RUN python3 -m venv /venv
 RUN /venv/bin/pip install --upgrade pip
 RUN /venv/bin/pip install numpy pandas matplotlib scikit-learn tensorflow xarray netCDF4 cartopy scikit-image
+RUN /venv/bin/pip install tensorflow[and-cuda]
 
 # Clean up and remove temporary files
 RUN apt-get clean && \
