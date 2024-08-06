@@ -19,7 +19,7 @@ RUN apt-get update && \
 # Create a virtual environment and install Python packages
 RUN python3 -m venv /venv
 RUN /venv/bin/pip install --upgrade pip
-RUN /venv/bin/pip install numpy pandas matplotlib scikit-learn tensorflow xarray netCDF4 cartopy
+RUN /venv/bin/pip install numpy pandas matplotlib scikit-learn tensorflow xarray netCDF4 cartopy scikit-image
 
 # Clean up and remove temporary files
 RUN apt-get clean && \
