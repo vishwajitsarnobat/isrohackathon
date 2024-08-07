@@ -1,5 +1,4 @@
-# isrohackathon
-Official Falcon's ISRO Hackathon repo
+Official Falcon's ISRO Hackathon repository
 
 # Initial Setup
 $ git clone https://github.com/vishwajitsarnobat/isrohackathon.git # Cloning the repo will fetch the Dockerfile and project files into the working directory
@@ -11,8 +10,8 @@ $ git pull origin main # Updates the local repo with the latest changes from the
 $ sudo docker build -t isro_hackathon . # Rebuilds the Docker image to update the environment and project files in the container
 
 # To Import Python Libraries or Install Packages via apt
-1. Open the Dockerfile and add the necessary commands in the `RUN` section. Combine all previous installation commands into one `RUN` instruction for efficiency.
-2. For any new commands or updates, use a separate `RUN` instruction. This helps Docker optimize caching and reduces unnecessary rebuilding. Use chatgpt if you don't know hoe to do this.
+1. Open the Dockerfile and add the necessary commands in the `RUN` section.
+2. Make sure to use separate `RUN` instruction. This helps Docker optimize caching and reduces unnecessary rebuilding. Use chatgpt if you don't know hoe to do this.
 $ sudo docker build -t isro_hackathon . # Rebuilds the Docker image with the updated Dockerfile
 
 # Uploading Changes to GitHub Repo
@@ -24,11 +23,8 @@ $ git push origin main
 $ sudo docker run -it isro_hackathon
 $ ls # Lists the project files inside the container
 
-# To clear older unwanted builds
-sudo docker container prune -f
-sudo docker image prune -f
-sudo docker volume prune -f
-sudo docker network prune -f
+# To clear older dangling builds
+sudo docker image prune
 
 # Steps to Be Usually Followed
 1. Initial Setup.

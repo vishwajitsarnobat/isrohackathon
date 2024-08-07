@@ -21,6 +21,9 @@ def standardize(data):
     standardized_data = scaler.fit_transform(reshaped_data).reshape(data.shape)
     return standardized_data
 
+file_path = 'https://www.mosdac.gov.in/download/?r=/download&path=L09yZGVyL0F1ZzI0XzEwNTYwNy9SQ1RMU18wMUpVTDIwMjRfMDAwNTQzX0wyQ19TVEQubmM%3D'
+print(extract_variables(file_path, 'VEL'))
+sys.exit()
 file_path = '/usr/src/app/RCTLS_01JUL2024_000543_L2C_STD.nc'
 file_path = '/home/vishwajitsarnobat/workspace/isrohackathon/RCTLS_01JUL2024_000543_L2C_STD.nc' # for my local
 
