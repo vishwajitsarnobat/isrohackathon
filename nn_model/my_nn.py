@@ -8,11 +8,6 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Conv3D, ConvLSTM2D, BatchNormalization, Dense, Flatten, Concatenate, Dropout
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 from tensorflow.keras.utils import Sequence
-from tensorflow.keras.mixed_precision import set_global_policy
-
-# Enable mixed precision
-policy = tf.keras.mixed_precision.Policy('mixed_float16')
-set_global_policy(policy)
 
 # Preprocessing functions
 def extract_variables(file_path, variable):
@@ -50,12 +45,11 @@ def load_and_preprocess_data(folder_path):
     
     return np.array(velocity_list), np.array(reflectivity_list), np.array(timestamps)
 
-def create_sequences(velocity_data, reflectivity_data, seq_length=4):
+def create_sequences(velocity_data, reflectivity_data, seq_length=3):
     X, y_velocity, y_reflectivity = [], [], []
     
     for i in range(len(velocity_data) - seq_length):
-        combined_sequence = np.stack([velocity_data[i:i + seq_length - 1], reflectivity_data[i:i + seq_length - 1]], axis=-1)
-        X.append(combined_sequence)
+        X.append(velocity_data[i:i + seq_length - 1])
         y_velocity.append(velocity_data[i + seq_length - 1])
         y_reflectivity.append(reflectivity_data[i + seq_length - 1])
     
@@ -63,7 +57,7 @@ def create_sequences(velocity_data, reflectivity_data, seq_length=4):
 
 # Data generator class
 class DataGenerator(Sequence):
-    def __init__(self, X_data, y_velocity, y_reflectivity, batch_size=8, shuffle=True):
+    def __init__(self, X_data, y_velocity, y_reflectivity, batch_size=32, shuffle=True):
         self.X_data = X_data
         self.y_velocity = y_velocity
         self.y_reflectivity = y_reflectivity
@@ -89,18 +83,18 @@ class DataGenerator(Sequence):
 # Model building functions
 def create_spatial_model(input_shape):
     inputs = Input(shape=input_shape)
-    x = Conv3D(16, (3, 3, 3), activation='relu', padding='same')(inputs)
+    x = Conv3D(32, (3, 3, 3), activation='relu', padding='same')(inputs)
     x = BatchNormalization()(x)
-    x = Conv3D(32, (3, 3, 3), activation='relu', padding='same')(x)
+    x = Conv3D(64, (3, 3, 3), activation='relu', padding='same')(x)
     x = BatchNormalization()(x)
     x = Flatten()(x)
     return Model(inputs, x)
 
 def create_temporal_model(input_shape):
     inputs = Input(shape=input_shape)
-    x = ConvLSTM2D(16, (3, 3), activation='relu', padding='same', return_sequences=True)(inputs)
+    x = ConvLSTM2D(32, (3, 3), activation='relu', padding='same', return_sequences=True)(inputs)
     x = BatchNormalization()(x)
-    x = ConvLSTM2D(32, (3, 3), activation='relu', padding='same')(x)
+    x = ConvLSTM2D(64, (3, 3), activation='relu', padding='same')(x)
     x = BatchNormalization()(x)
     x = Flatten()(x)
     return Model(inputs, x)
@@ -154,8 +148,8 @@ model.compile(optimizer='adam', loss={'velocity_output': 'mean_squared_error', '
               metrics={'velocity_output': 'mae', 'reflectivity_output': 'mae'})
 
 # Create data generators
-train_generator = DataGenerator(train_X, train_y_velocity, train_y_reflectivity, batch_size=8)
-val_generator = DataGenerator(val_X, val_y_velocity, val_y_reflectivity, batch_size=8, shuffle=False)
+train_generator = DataGenerator(train_X, train_y_velocity, train_y_reflectivity, batch_size=32)
+val_generator = DataGenerator(val_X, val_y_velocity, val_y_reflectivity, batch_size=32, shuffle=False)
 
 # Training the model
 early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
