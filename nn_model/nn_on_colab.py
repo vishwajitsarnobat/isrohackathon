@@ -1,4 +1,4 @@
-# try this code on larger gpu
+from google.colab import files
 import xarray as xr
 import numpy as np
 import os
@@ -7,6 +7,9 @@ import tensorflow as tf
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Conv3D, ConvLSTM2D, BatchNormalization, Dense, Flatten, Concatenate, Dropout
 from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+
+# Upload files
+uploaded = files.upload()
 
 # Preprocessing functions
 def extract_variables(file_path, variable):
@@ -21,46 +24,43 @@ def standardize(data):
     standardized_data = scaler.fit_transform(reshaped_data).reshape(data.shape)
     return standardized_data
 
-def load_and_preprocess_data(folder_path):
+def load_and_preprocess_data(uploaded_files):
     velocity_list = []
     reflectivity_list = []
     timestamps = []
     
-    for file_name in sorted(os.listdir(folder_path)):
-        if file_name.endswith('.nc'):
-            file_path = os.path.join(folder_path, file_name)
-            radial_velocity = extract_variables(file_path, 'VEL')
-            reflectivity = extract_variables(file_path, 'DBZ')
-            
-            standardized_velocity = standardize(radial_velocity)
-            standardized_reflectivity = standardize(reflectivity)
-            
-            velocity_list.append(standardized_velocity)
-            reflectivity_list.append(standardized_reflectivity)
-            
-            ds = xr.open_dataset(file_path)
-            history = ds.attrs['history']
-            timestamp = re.search(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', history).group(0)
-            timestamps.append(timestamp)
-            ds.close()
+    for file_name in uploaded_files.keys():
+        file_path = file_name
+        radial_velocity = extract_variables(file_path, 'VEL')
+        reflectivity = extract_variables(file_path, 'DBZ')
+        
+        standardized_velocity = standardize(radial_velocity)
+        standardized_reflectivity = standardize(reflectivity)
+        
+        velocity_list.append(standardized_velocity)
+        reflectivity_list.append(standardized_reflectivity)
+        
+        ds = xr.open_dataset(file_path)
+        timestamps.append(ds['time'].values)
+        ds.close()
     
     return np.array(velocity_list), np.array(reflectivity_list), np.array(timestamps)
 
 # Model building functions
 def create_spatial_model(input_shape):
     inputs = Input(shape=input_shape)
-    x = Conv3D(32, (3, 3, 3), activation='relu', padding='same')(inputs)
+    x = Conv3D(16, (3, 3, 3), activation='relu', padding='same')(inputs)
     x = BatchNormalization()(x)
-    x = Conv3D(64, (3, 3, 3), activation='relu', padding='same')(x)
+    x = Conv3D(32, (3, 3, 3), activation='relu', padding='same')(x)
     x = BatchNormalization()(x)
     x = Flatten()(x)
     return Model(inputs, x)
 
 def create_temporal_model(input_shape):
     inputs = Input(shape=input_shape)
-    x = ConvLSTM2D(32, (3, 3), activation='relu', padding='same', return_sequences=True)(inputs)
+    x = ConvLSTM2D(16, (3, 3), activation='relu', padding='same', return_sequences=True)(inputs)
     x = BatchNormalization()(x)
-    x = ConvLSTM2D(64, (3, 3), activation='relu', padding='same')(x)
+    x = ConvLSTM2D(32, (3, 3), activation='relu', padding='same')(x)
     x = BatchNormalization()(x)
     x = Flatten()(x)
     return Model(inputs, x)
@@ -71,9 +71,9 @@ def create_radarcast_net(spatial_input_shape, temporal_input_shape):
     
     combined_input = Concatenate()([spatial_model.output, temporal_model.output])
     
-    x = Dense(128, activation='relu')(combined_input)
+    x = Dense(64, activation='relu')(combined_input)
     x = Dropout(0.3)(x)
-    x = Dense(64, activation='relu')(x)
+    x = Dense(32, activation='relu')(x)
     x = Dropout(0.3)(x)
     output = Dense(1, activation='linear')(x)
     
@@ -81,8 +81,7 @@ def create_radarcast_net(spatial_input_shape, temporal_input_shape):
     return model
 
 # Loading and preprocessing data
-folder_path = '/home/vishwajitsarnobat/Downloads/isro_hackathon_data'
-velocity_data, reflectivity_data, timestamps = load_and_preprocess_data(folder_path)
+velocity_data, reflectivity_data, timestamps = load_and_preprocess_data(uploaded)
 
 # Prepare input shapes
 spatial_input_shape = (81, 481, 481, 1)  # Height, Width, Depth, Channels
@@ -118,7 +117,7 @@ test_reflectivity = test_reflectivity[..., np.newaxis]
 model = create_radarcast_net(spatial_input_shape, temporal_input_shape)
 model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mae'])
 
-# Training the model
+# Training the model with a smaller batch size
 early_stopping = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
 model_checkpoint = ModelCheckpoint('radarcast_net_best_model.h5', save_best_only=True)
 
@@ -127,7 +126,7 @@ history = model.fit(
     train_labels,
     validation_data=([val_velocity, val_reflectivity], val_labels),
     epochs=100,
-    batch_size=32,
+    batch_size=8,  # Smaller batch size
     callbacks=[early_stopping, model_checkpoint]
 )
 
